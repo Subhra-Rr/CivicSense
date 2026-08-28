@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">CivicSense</string>
+    <string name="tagline">Intelligent Civic Action System</string>
+    <string name="hero_title">See a problem.\nCivicSense can act on it.</string>
+    <string name="hero_subtitle">Report a civic problem with a photo, voice or a few words. CivicSense uses AI to understand what happened, connect it to the right civic workflow and help track it until resolution.</string>
+    <string name="action_report_problem">Report a Problem</string>
+    <string name="action_explore_issues">Explore Civic Issues</string>
+    <string name="live_civic_activity">Live Civic Activity</string>
+    <string name="civic_issues_around_you">Civic issues around you</string>
+    <string name="how_civicsense_works">How CivicSense Works</string>
+    <string name="my_civic_activity">My Civic Activity</string>
+    <string name="trust_center">Trust Center &amp; AI</string>
+    <string name="civic_map">Civic Intelligence Map</string>
+    <string name="officer_desk">Officer Operations</string>
+    <string name="admin_insights">Civic Insights</string>
+</resources>

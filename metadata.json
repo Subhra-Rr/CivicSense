@@ -1,0 +1,6 @@
+{
+  "name": "CivicSense",
+  "description": "Intelligent Civic Action System. Report civic problems with a photo, voice, or text. AI analyzes severity, routes to responsible departments, coordinates community confirmation, and tracks resolution.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
