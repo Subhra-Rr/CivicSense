@@ -212,28 +212,38 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    val authError = MutableStateFlow<String?>(null)
+    val isAuthLoading = MutableStateFlow(false)
+
     fun setUserRole(role: UserRole) {
         authManager.updateRole(role)
     }
 
-    fun signInWithGoogle(webClientId: String = "") {
+    fun signInWithGoogle(activityContext: android.content.Context, webClientId: String = "") {
         viewModelScope.launch {
-            val result = authManager.signInWithGoogle(webClientId)
+            isAuthLoading.value = true
+            authError.value = null
+            val result = authManager.signInWithGoogle(activityContext, webClientId)
+            isAuthLoading.value = false
             if (result.isSuccess) {
                 val user = result.getOrNull()
                 _snackBarMessage.value = "Signed in as ${user?.name ?: "User"}"
             } else {
-                _snackBarMessage.value = "Google Sign-In: ${result.exceptionOrNull()?.message ?: "Failed"}"
+                val err = result.exceptionOrNull()?.message ?: "Sign-in failed"
+                authError.value = err
+                _snackBarMessage.value = "Google Sign-In: $err"
             }
         }
     }
 
     fun signInWithEmail(email: String, password: String, role: UserRole) {
+        authError.value = null
         val user = authManager.signInWithEmail(email, null, role)
         _snackBarMessage.value = "Welcome back, ${user.name}!"
     }
 
     fun signUp(name: String, email: String, password: String, role: UserRole) {
+        authError.value = null
         val user = authManager.signInWithEmail(email, name, role)
         _snackBarMessage.value = "Account created successfully for ${user.name}!"
     }

@@ -71,14 +71,18 @@ import com.example.ui.theme.CivicNavyDark
 import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.TextTertiary
 
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
+
 @Composable
 fun AuthDialog(
     onDismiss: () -> Unit,
-    onGoogleSignIn: () -> Unit,
+    onGoogleSignIn: (Context) -> Unit,
     onEmailSignIn: (email: String, password: String, role: UserRole) -> Unit,
     onEmailSignUp: (name: String, email: String, password: String, role: UserRole) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Sign Up
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -180,7 +184,7 @@ fun AuthDialog(
                 Button(
                     onClick = {
                         isSubmitting = true
-                        onGoogleSignIn()
+                        onGoogleSignIn(context)
                         onDismiss()
                     },
                     modifier = Modifier

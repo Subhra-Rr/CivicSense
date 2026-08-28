@@ -20,16 +20,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
@@ -38,22 +44,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.data.auth.UserProfile
 import com.example.data.model.CivicIncident
 import com.example.data.model.UserRole
 import com.example.ui.components.IncidentCard
 import com.example.ui.theme.*
-
-import com.example.data.auth.UserProfile
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 
 @Composable
 fun ProfileScreen(
@@ -81,7 +82,7 @@ fun ProfileScreen(
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = CivicNavyDark)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
@@ -90,41 +91,68 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            // User Photo Avatar
                             Box(
                                 modifier = Modifier
-                                    .size(52.dp)
+                                    .size(56.dp)
                                     .clip(CircleShape)
                                     .background(CivicBlue),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(30.dp)
-                                )
+                                if (!userProfile?.avatarUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = userProfile?.avatarUrl,
+                                        contentDescription = "User Avatar",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text(
+                                        text = (userProfile?.name ?: userName).take(1).uppercase(),
+                                        color = Color.White,
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.width(14.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = userProfile?.name ?: userName,
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1
                                 )
-                                Text(
-                                    text = userRole.displayName,
-                                    fontSize = 13.sp,
-                                    color = CivicBlueLight
-                                )
-                                if (userProfile?.isGoogleUser == true) {
+                                if (!userProfile?.email.isNullOrBlank()) {
                                     Text(
-                                        text = "Google Authenticated",
-                                        fontSize = 11.sp,
-                                        color = Color(0xFF81C784),
-                                        fontWeight = FontWeight.Medium
+                                        text = userProfile?.email ?: "",
+                                        fontSize = 12.sp,
+                                        color = Color.White.copy(alpha = 0.8f),
+                                        maxLines = 1
                                     )
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = userRole.displayName,
+                                        fontSize = 12.sp,
+                                        color = CivicBlueLight,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    if (userProfile?.isGoogleUser == true) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Verified,
+                                            contentDescription = "Google Verified",
+                                            tint = Color(0xFF81C784),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -142,13 +170,13 @@ fun ProfileScreen(
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Account", fontSize = 12.sp)
+                            Text("Switch", fontSize = 11.sp)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // My Civic Activity Scorecards (Section 19)
+                    // My Civic Activity Scorecards
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)

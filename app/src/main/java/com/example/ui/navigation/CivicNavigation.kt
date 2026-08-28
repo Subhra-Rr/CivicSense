@@ -70,7 +70,10 @@ import com.example.ui.viewmodel.CivicViewModel
 
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.IconButton
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.example.ui.screens.AuthDialog
+import com.example.ui.screens.AuthScreen
 
 enum class NavDestination(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
@@ -87,6 +90,22 @@ fun CivicMainScreen(
     viewModel: CivicViewModel,
     modifier: Modifier = Modifier
 ) {
+    val isAuthenticated by viewModel.isAuthenticated.collectAsState()
+    val isAuthLoading by viewModel.isAuthLoading.collectAsState()
+    val authError by viewModel.authError.collectAsState()
+
+    if (!isAuthenticated) {
+        AuthScreen(
+            isLoading = isAuthLoading,
+            errorMessage = authError,
+            onGoogleSignIn = { context -> viewModel.signInWithGoogle(context) },
+            onEmailSignIn = { email, pass, role -> viewModel.signInWithEmail(email, pass, role) },
+            onEmailSignUp = { name, email, pass, role -> viewModel.signUp(name, email, pass, role) },
+            modifier = modifier
+        )
+        return
+    }
+
     var currentScreen by remember { mutableStateOf(NavDestination.HOME) }
     var inIncidentDetail by remember { mutableStateOf(false) }
     var inTrustCenter by remember { mutableStateOf(false) }
@@ -231,11 +250,28 @@ fun CivicMainScreen(
                                     onClick = { showAuthDialog = true },
                                     modifier = Modifier.testTag("topbar_auth_button")
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AccountCircle,
-                                        contentDescription = "User Account",
-                                        tint = CivicNavyDark
-                                    )
+                                    if (!currentUser.avatarUrl.isNullOrBlank()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                                .background(CivicBlueLight),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            AsyncImage(
+                                                model = currentUser.avatarUrl,
+                                                contentDescription = "User Avatar",
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.AccountCircle,
+                                            contentDescription = "User Account",
+                                            tint = CivicNavyDark
+                                        )
+                                    }
                                 }
                                 // Quick Role Indicator Pill
                                 Box(
@@ -430,12 +466,12 @@ fun CivicMainScreen(
     }
 
     if (showAuthDialog) {
-            AuthDialog(
-                onDismiss = { showAuthDialog = false },
-                onGoogleSignIn = { viewModel.signInWithGoogle() },
-                onEmailSignIn = { email, pass, role -> viewModel.signInWithEmail(email, pass, role) },
-                onEmailSignUp = { name, email, pass, role -> viewModel.signUp(name, email, pass, role) }
-            )
-        }
+        AuthDialog(
+            onDismiss = { showAuthDialog = false },
+            onGoogleSignIn = { context -> viewModel.signInWithGoogle(context) },
+            onEmailSignIn = { email, pass, role -> viewModel.signInWithEmail(email, pass, role) },
+            onEmailSignUp = { name, email, pass, role -> viewModel.signUp(name, email, pass, role) }
+        )
+    }
     }
 }
