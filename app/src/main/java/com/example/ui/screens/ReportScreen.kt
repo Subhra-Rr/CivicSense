@@ -1,12 +1,17 @@
 package com.example.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MyLocation
@@ -48,18 +55,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.example.data.repository.ReportSubmissionProgress
 import com.example.ui.theme.*
 
 @Composable
 fun ReportScreen(
     submissionProgress: ReportSubmissionProgress,
-    onSubmitReport: (description: String, address: String, zone: String) -> Unit,
+    onSubmitReport: (description: String, address: String, zone: String, imageUrl: String?) -> Unit,
     onReportSuccess: (String) -> Unit,
     onResetProgress: () -> Unit,
     modifier: Modifier = Modifier
@@ -68,8 +77,14 @@ fun ReportScreen(
     var address by remember { mutableStateOf("450 Market Street, District 2") }
     var zone by remember { mutableStateOf("Downtown Transit Corridor") }
     var additionalNotes by remember { mutableStateOf("") }
-    var hasPhotoAttached by remember { mutableStateOf(false) }
+    var selectedPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var isRecordingVoice by remember { mutableStateOf(false) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        selectedPhotoUri = uri
+    }
 
     val quickPresets = listOf(
         "Deep pothole causing vehicle tire damage near crosswalk",
@@ -204,29 +219,135 @@ fun ReportScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Photo Evidence Toggle
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (hasPhotoAttached) StatusResolvedBg else SurfaceCardSubtle)
-                            .clickable { hasPhotoAttached = !hasPhotoAttached }
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AddPhotoAlternate,
-                            contentDescription = "Photo",
-                            tint = if (hasPhotoAttached) StatusResolved else CivicBlue,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (hasPhotoAttached) "Photo evidence attached (IMG_9482.jpg)" else "Attach photo evidence (Optional)",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (hasPhotoAttached) StatusResolved else CivicNavyLight
-                        )
+                    // Real Photo Evidence Attachment
+                    if (selectedPhotoUri != null) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = StatusResolvedBg),
+                            border = BorderStroke(1.dp, StatusResolved.copy(alpha = 0.5f))
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = null,
+                                            tint = StatusResolved,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Device Photo Evidence Attached",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = StatusResolved
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = { selectedPhotoUri = null },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Remove photo",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(160.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.Black.copy(alpha = 0.05f))
+                                ) {
+                                    AsyncImage(
+                                        model = selectedPhotoUri,
+                                        contentDescription = "Uploaded evidence preview",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    Text(
+                                        text = "Tap to change photo",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = CivicBlue,
+                                        modifier = Modifier.clickable {
+                                            photoPickerLauncher.launch("image/*")
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(SurfaceCardSubtle)
+                                .clickable {
+                                    photoPickerLauncher.launch("image/*")
+                                }
+                                .padding(12.dp)
+                                .testTag("btn_attach_device_photo"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.AddPhotoAlternate,
+                                    contentDescription = "Photo",
+                                    tint = CivicBlue,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Attach Photo Evidence",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Select an image directly from your device gallery",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = { photoPickerLauncher.launch("image/*") },
+                                shape = RoundedCornerShape(6.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = CivicBlueLight,
+                                    contentColor = CivicBlueDark
+                                ),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text("Browse", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -356,7 +477,7 @@ fun ReportScreen(
                 onClick = {
                     if (description.isNotBlank()) {
                         val fullDescription = if (additionalNotes.isNotBlank()) "$description. Landmark notes: $additionalNotes" else description
-                        onSubmitReport(fullDescription, address, zone)
+                        onSubmitReport(fullDescription, address, zone, selectedPhotoUri?.toString())
                     }
                 },
                 enabled = description.isNotBlank() && submissionProgress is ReportSubmissionProgress.Idle,

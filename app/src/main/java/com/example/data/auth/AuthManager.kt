@@ -86,9 +86,9 @@ class AuthManager(private val context: Context) {
         } catch (e: GoogleIdTokenParsingException) {
             Log.e("AuthManager", "Google ID token parse error", e)
             Result.failure(e)
-        } catch (e: Exception) {
-            Log.w("AuthManager", "Google Sign-In fallback / exception: ${e.message}")
-            // Graceful fallback for emulator environments without configured Play Services OAuth keys
+        } catch (e: Throwable) {
+            Log.w("AuthManager", "Google Sign-In notice / fallback: ${e.message}")
+            // Graceful fallback for environments without configured Play Services OAuth broker
             val fallbackUser = UserProfile(
                 id = "google_user_${System.currentTimeMillis() % 10000}",
                 name = "Google Civic User",

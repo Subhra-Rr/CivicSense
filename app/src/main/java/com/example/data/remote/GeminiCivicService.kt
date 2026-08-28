@@ -157,12 +157,18 @@ class GeminiCivicAnalyzer {
 
     private fun parseJsonResponse(raw: String): AIReportAnalysisResult? {
         return try {
-            val clean = raw.trim()
-                .removePrefix("```json")
-                .removePrefix("```")
-                .removeSuffix("```")
-                .trim()
-            val json = JSONObject(clean)
+            val jsonString = if (raw.contains("{") && raw.contains("}")) {
+                val start = raw.indexOf('{')
+                val end = raw.lastIndexOf('}')
+                raw.substring(start, end + 1)
+            } else {
+                raw.trim()
+                    .removePrefix("```json")
+                    .removePrefix("```")
+                    .removeSuffix("```")
+                    .trim()
+            }
+            val json = JSONObject(jsonString)
             val categoryStr = json.optString("category", "ROADS")
             val priorityStr = json.optString("priority", "MEDIUM")
             val departmentStr = json.optString("department", "PUBLIC_WORKS")
@@ -185,6 +191,7 @@ class GeminiCivicAnalyzer {
                 isDuplicate = json.optBoolean("isDuplicate", false)
             )
         } catch (e: Exception) {
+            Log.w("GeminiCivicService", "Failed to parse Gemini JSON output: ${e.message}")
             null
         }
     }

@@ -53,10 +53,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.data.model.CitizenReport
 import com.example.data.model.CivicIncident
 import com.example.data.model.IncidentStatus
@@ -207,6 +209,32 @@ fun IncidentDetailScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         AttributeRow(icon = Icons.Default.AccessTime, label = "Reported", value = timeFormat.format(Date(incident.reportedAt)))
+
+                        // Photo evidence if attached
+                        if (!incident.imageUrl.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Text(
+                                text = "Photo Evidence Attached",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Black.copy(alpha = 0.05f))
+                            ) {
+                                AsyncImage(
+                                    model = incident.imageUrl,
+                                    contentDescription = "Incident Photo Evidence",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
                     }
                 }
             }

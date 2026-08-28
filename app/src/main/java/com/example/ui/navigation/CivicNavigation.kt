@@ -298,10 +298,16 @@ fun CivicMainScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding)
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.TopCenter
                 ) {
-                    when {
-                        inIncidentDetail -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .widthIn(max = if (currentScreen == NavDestination.MAP) androidx.compose.ui.unit.Dp.Unspecified else 1100.dp)
+                    ) {
+                        when {
+                            inIncidentDetail -> {
                             IncidentDetailScreen(
                                 incident = selectedIncident,
                                 timeline = selectedTimeline,
@@ -348,8 +354,13 @@ fun CivicMainScreen(
                                 NavDestination.REPORT -> {
                                     ReportScreen(
                                         submissionProgress = submissionProgress,
-                                        onSubmitReport = { desc, addr, zone ->
-                                            viewModel.submitReport(desc, addr, zone)
+                                        onSubmitReport = { desc, addr, zone, imageUrl ->
+                                            viewModel.submitReport(
+                                                description = desc,
+                                                address = addr,
+                                                zone = zone,
+                                                imageUrl = imageUrl
+                                            )
                                         },
                                         onReportSuccess = { id ->
                                             viewModel.selectIncident(id)
@@ -416,8 +427,9 @@ fun CivicMainScreen(
                 }
             }
         }
+    }
 
-        if (showAuthDialog) {
+    if (showAuthDialog) {
             AuthDialog(
                 onDismiss = { showAuthDialog = false },
                 onGoogleSignIn = { viewModel.signInWithGoogle() },
