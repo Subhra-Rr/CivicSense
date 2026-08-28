@@ -81,11 +81,12 @@ fun AuthDialog(
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Sign Up
     var name by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("alex.morgan@civicsense.org") }
-    var password by remember { mutableStateOf("••••••••") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var selectedRole by remember { mutableStateOf(UserRole.CITIZEN) }
     var isSubmitting by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -347,13 +348,47 @@ fun AuthDialog(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
+                // Error message banner if validation fails
+                AnimatedVisibility(visible = errorMessage != null) {
+                    errorMessage?.let { msg ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                        ) {
+                            Text(
+                                text = msg,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
+                }
+
                 // Action Submit Button
                 Button(
                     onClick = {
+                        if (email.isBlank() || !email.contains("@")) {
+                            errorMessage = "Please enter a valid email address."
+                            return@Button
+                        }
+                        if (password.length < 6) {
+                            errorMessage = "Password must be at least 6 characters."
+                            return@Button
+                        }
+                        if (selectedTab == 1 && name.isBlank()) {
+                            errorMessage = "Please enter your name."
+                            return@Button
+                        }
+                        errorMessage = null
+                        isSubmitting = true
                         if (selectedTab == 0) {
-                            onEmailSignIn(email, password, selectedRole)
+                            onEmailSignIn(email.trim(), password, selectedRole)
                         } else {
-                            onEmailSignUp(name.ifBlank { "Citizen User" }, email, password, selectedRole)
+                            onEmailSignUp(name.trim(), email.trim(), password, selectedRole)
                         }
                         onDismiss()
                     },

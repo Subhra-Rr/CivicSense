@@ -51,6 +51,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.LockOpen
+import com.example.data.auth.UserProfile
 import com.example.data.model.CivicIncident
 import com.example.data.model.IncidentStatus
 import com.example.data.model.Priority
@@ -64,11 +67,13 @@ import com.example.ui.theme.*
 fun HomeScreen(
     incidents: List<CivicIncident>,
     userRole: UserRole,
+    currentUser: UserProfile? = null,
     onReportClick: () -> Unit,
     onExploreMapClick: () -> Unit,
     onIncidentClick: (String) -> Unit,
     onTrustCenterClick: () -> Unit,
     onRoleChange: (UserRole) -> Unit,
+    onAuthClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val activeIncidents = incidents.filter { it.status != IncidentStatus.VERIFIED }
@@ -83,6 +88,15 @@ fun HomeScreen(
                 .testTag("home_screen_scroll"),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
+            // 0. Interactive Auth & Citizen Identity Bar
+            item {
+                AuthIdentityBanner(
+                    currentUser = currentUser,
+                    userRole = userRole,
+                    onAuthClick = onAuthClick
+                )
+            }
+
             // 1. Hero Section (Public Utility Focus)
             item {
                 HeroSection(
@@ -646,6 +660,95 @@ private fun TrustCenterBanner(onTrustCenterClick: () -> Unit) {
                 tint = Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.size(16.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun AuthIdentityBanner(
+    currentUser: UserProfile?,
+    userRole: UserRole,
+    onAuthClick: () -> Unit
+) {
+    val isLoggedIn = currentUser != null && currentUser.id != "guest" && currentUser.email.isNotBlank()
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+            .clickable { onAuthClick() }
+            .testTag("auth_identity_banner"),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isLoggedIn) CivicBlueLight.copy(alpha = 0.6f) else MaterialTheme.colorScheme.surfaceVariant
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (isLoggedIn) CivicBlue.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (isLoggedIn) CivicNavyDark else CivicBlue),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isLoggedIn) Icons.Default.AccountCircle else Icons.Default.LockOpen,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = if (isLoggedIn) (currentUser?.name ?: "Civic User") else "Sign In or Register",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (isLoggedIn) {
+                            if (currentUser?.isGoogleUser == true) "Signed in with Google • ${userRole.displayName}"
+                            else "${currentUser?.email} • ${userRole.displayName}"
+                        } else {
+                            "Sync reports, verify issues & earn civic trust"
+                        },
+                        fontSize = 11.sp,
+                        color = if (isLoggedIn) CivicNavyDark else TextSecondary
+                    )
+                }
+            }
+
+            Button(
+                onClick = onAuthClick,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isLoggedIn) CivicBlue else CivicNavyDark,
+                    contentColor = Color.White
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                modifier = Modifier.testTag("btn_banner_auth_action")
+            ) {
+                Text(
+                    text = if (isLoggedIn) "Account" else "Sign In / Up",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }

@@ -332,6 +332,7 @@ fun CivicMainScreen(
                                     HomeScreen(
                                         incidents = allIncidents,
                                         userRole = userRole,
+                                        currentUser = currentUser,
                                         onReportClick = { currentScreen = NavDestination.REPORT },
                                         onExploreMapClick = { currentScreen = NavDestination.MAP },
                                         onIncidentClick = { id ->
@@ -339,7 +340,8 @@ fun CivicMainScreen(
                                             inIncidentDetail = true
                                         },
                                         onTrustCenterClick = { inTrustCenter = true },
-                                        onRoleChange = { viewModel.setUserRole(it) }
+                                        onRoleChange = { viewModel.setUserRole(it) },
+                                        onAuthClick = { showAuthDialog = true }
                                     )
                                 }
 
