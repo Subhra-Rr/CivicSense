@@ -1,5 +1,6 @@
 package com.example.data.repository
 
+import com.example.data.firebase.FirebaseCivicService
 import com.example.data.local.CitizenReportEntity
 import com.example.data.local.CivicDao
 import com.example.data.local.CommunityConfirmationEntity
@@ -7,18 +8,20 @@ import com.example.data.local.IncidentEntity
 import com.example.data.local.SeedData
 import com.example.data.local.TimelineEventEntity
 import com.example.data.model.AIReportAnalysisResult
+import com.example.data.model.CitizenReport
 import com.example.data.model.CivicCategory
 import com.example.data.model.CivicIncident
 import com.example.data.model.CivicInsight
-import com.example.data.model.CitizenReport
 import com.example.data.model.IncidentStatus
 import com.example.data.model.Priority
 import com.example.data.model.TimelineEvent
 import com.example.data.remote.GeminiCivicAnalyzer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import java.util.UUID
+import kotlinx.coroutines.launch
 
 sealed class ReportSubmissionProgress {
     object Idle : ReportSubmissionProgress()
@@ -30,39 +33,91 @@ sealed class ReportSubmissionProgress {
 
 class CivicRepository(
     private val dao: CivicDao,
+    private val firebaseService: FirebaseCivicService? = null,
     private val geminiAnalyzer: GeminiCivicAnalyzer = GeminiCivicAnalyzer()
 ) {
+    private val scope = CoroutineScope(Dispatchers.IO)
+
     suspend fun initializeDatabaseIfEmpty() {
         val count = dao.getIncidentCount()
-        if (count == 0) {
-            val initialIncidents = SeedData.getInitialIncidents().map { IncidentEntity.fromDomain(it) }
-            val initialEvents = SeedData.getInitialTimelineEvents().map { TimelineEventEntity.fromDomain(it) }
-            val initialReports = SeedData.getInitialCitizenReports().map { CitizenReportEntity.fromDomain(it) }
+        val initialIncidents = SeedData.getInitialIncidents()
+        val initialEvents = SeedData.getInitialTimelineEvents()
+        val initialReports = SeedData.getInitialCitizenReports()
 
-            dao.insertIncidents(initialIncidents)
-            dao.insertTimelineEvents(initialEvents)
-            dao.insertCitizenReports(initialReports)
+        if (count == 0) {
+            dao.insertIncidents(initialIncidents.map { IncidentEntity.fromDomain(it) })
+            dao.insertTimelineEvents(initialEvents.map { TimelineEventEntity.fromDomain(it) })
+            dao.insertCitizenReports(initialReports.map { CitizenReportEntity.fromDomain(it) })
+        }
+
+        // Also check and seed Cloud Firestore if connected
+        try {
+            firebaseService?.checkAndSeedInitialData(initialIncidents, initialEvents, initialReports)
+        } catch (e: Exception) {
+            // Non-blocking fallback
         }
     }
 
     fun getAllIncidents(): Flow<List<CivicIncident>> {
+        if (firebaseService != null && firebaseService.isAvailable()) {
+            return firebaseService.getAllIncidentsStream().map { firestoreList ->
+                if (firestoreList.isNotEmpty()) {
+                    // Update local cache asynchronously
+                    scope.launch {
+                        dao.insertIncidents(firestoreList.map { IncidentEntity.fromDomain(it) })
+                    }
+                    firestoreList
+                } else {
+                    dao.getAllIncidents().first().map { it.toDomain() }
+                }
+            }
+        }
         return dao.getAllIncidents().map { list -> list.map { it.toDomain() } }
     }
 
     fun getIncidentById(id: String): Flow<CivicIncident?> {
+        if (firebaseService != null && firebaseService.isAvailable()) {
+            return firebaseService.getIncidentStream(id).map { firestoreIncident ->
+                firestoreIncident ?: dao.getIncidentById(id).first()?.toDomain()
+            }
+        }
         return dao.getIncidentById(id).map { it?.toDomain() }
     }
 
     fun getTimeline(incidentId: String): Flow<List<TimelineEvent>> {
+        if (firebaseService != null && firebaseService.isAvailable()) {
+            return firebaseService.getTimelineStream(incidentId).map { firestoreTimeline ->
+                if (firestoreTimeline.isNotEmpty()) firestoreTimeline
+                else dao.getTimelineForIncident(incidentId).first().map { it.toDomain() }
+            }
+        }
         return dao.getTimelineForIncident(incidentId).map { list -> list.map { it.toDomain() } }
     }
 
     fun getCitizenReports(incidentId: String): Flow<List<CitizenReport>> {
+        if (firebaseService != null && firebaseService.isAvailable()) {
+            return firebaseService.getCitizenReportsStream(incidentId).map { firestoreReports ->
+                if (firestoreReports.isNotEmpty()) firestoreReports
+                else dao.getReportsForIncident(incidentId).first().map { it.toDomain() }
+            }
+        }
         return dao.getReportsForIncident(incidentId).map { list -> list.map { it.toDomain() } }
     }
 
     fun getOfficerOperationalQueue(): Flow<List<CivicIncident>> {
-        return dao.getOfficerOperationalQueue().map { list -> list.map { it.toDomain() } }
+        return getAllIncidents().map { list ->
+            list.filter { it.status != IncidentStatus.VERIFIED }
+                .sortedWith(
+                    compareBy<CivicIncident> {
+                        when (it.priority) {
+                            Priority.CRITICAL -> 1
+                            Priority.HIGH -> 2
+                            Priority.MEDIUM -> 3
+                            Priority.LOW -> 4
+                        }
+                    }.thenBy { it.slaDeadline }
+                )
+        }
     }
 
     suspend fun submitReport(
@@ -102,8 +157,7 @@ class CivicRepository(
 
         if (analysis.isDuplicate && analysis.duplicateCandidateId != null) {
             val existingId = analysis.duplicateCandidateId
-            // Attach as community report
-            val reportEntity = CitizenReportEntity(
+            val reportDomain = CitizenReport(
                 id = "CR-${System.currentTimeMillis() % 10000}",
                 incidentId = existingId,
                 reporterName = "Verified Citizen",
@@ -111,21 +165,25 @@ class CivicRepository(
                 timestamp = now,
                 imageUrl = imageUrl
             )
-            dao.insertCitizenReport(reportEntity)
-            
-            // Add timeline note
-            dao.insertTimelineEvent(
-                TimelineEventEntity(
-                    incidentId = existingId,
-                    title = "Additional Citizen Report Attached",
-                    description = "New citizen evidence attached. Community intelligence updated.",
-                    timestamp = now,
-                    status = IncidentStatus.TRIAGED.name,
-                    actorName = "Civic Intelligence Hub",
-                    actorRole = "System"
-                )
+            val timelineDomain = TimelineEvent(
+                id = now,
+                incidentId = existingId,
+                title = "Additional Citizen Report Attached",
+                description = "New citizen evidence attached. Community intelligence updated.",
+                timestamp = now,
+                status = IncidentStatus.TRIAGED,
+                actorName = "Civic Intelligence Hub",
+                actorRole = "System"
             )
+
+            // Local cache
+            dao.insertCitizenReport(CitizenReportEntity.fromDomain(reportDomain))
+            dao.insertTimelineEvent(TimelineEventEntity.fromDomain(timelineDomain))
             dao.incrementConfirmationYes(existingId)
+
+            // Cloud Firestore
+            firebaseService?.addCitizenReport(reportDomain)
+            firebaseService?.addTimelineEvent(timelineDomain)
 
             onProgress(ReportSubmissionProgress.Success(existingId, true, analysis))
             return existingId
@@ -167,55 +225,60 @@ class CivicRepository(
             reporterId = reporterId
         )
 
+        // Local cache
         dao.insertIncident(IncidentEntity.fromDomain(newIncident))
 
-        // Initial timeline events
-        dao.insertTimelineEvent(
-            TimelineEventEntity(
-                incidentId = incidentId,
-                title = "Report Received",
-                description = "Citizen reported civic issue: \"$description\"",
-                timestamp = now,
-                status = IncidentStatus.REPORTED.name,
-                actorName = "Citizen",
-                actorRole = "Reporter"
-            )
+        val event1 = TimelineEvent(
+            id = now,
+            incidentId = incidentId,
+            title = "Report Received",
+            description = "Citizen reported civic issue: \"$description\"",
+            timestamp = now,
+            status = IncidentStatus.REPORTED,
+            actorName = "Citizen",
+            actorRole = "Reporter"
         )
 
-        dao.insertTimelineEvent(
-            TimelineEventEntity(
-                incidentId = incidentId,
-                title = "AI Analysis Completed",
-                description = "Severity scored ${analysis.severityScore}/100. ${analysis.reasoningExplanation}",
-                timestamp = now + 1000L,
-                status = IncidentStatus.TRIAGED.name,
-                actorName = "CivicSense AI",
-                actorRole = "Automated Engine"
-            )
+        val event2 = TimelineEvent(
+            id = now + 1000L,
+            incidentId = incidentId,
+            title = "AI Analysis Completed",
+            description = "Severity scored ${analysis.severityScore}/100. ${analysis.reasoningExplanation}",
+            timestamp = now + 1000L,
+            status = IncidentStatus.TRIAGED,
+            actorName = "CivicSense AI",
+            actorRole = "Automated Engine"
         )
 
-        dao.insertTimelineEvent(
-            TimelineEventEntity(
-                incidentId = incidentId,
-                title = "Department Assigned",
-                description = "Routed to ${analysis.department.displayName} with ${analysis.slaHours}h SLA.",
-                timestamp = now + 2000L,
-                status = IncidentStatus.TRIAGED.name,
-                actorName = "Civic Workflow Dispatcher",
-                actorRole = "System"
-            )
+        val event3 = TimelineEvent(
+            id = now + 2000L,
+            incidentId = incidentId,
+            title = "Department Assigned",
+            description = "Routed to ${analysis.department.displayName} with ${analysis.slaHours}h SLA.",
+            timestamp = now + 2000L,
+            status = IncidentStatus.TRIAGED,
+            actorName = "Civic Workflow Dispatcher",
+            actorRole = "System"
         )
 
-        dao.insertCitizenReport(
-            CitizenReportEntity(
-                id = "CR-${System.currentTimeMillis() % 10000}",
-                incidentId = incidentId,
-                reporterName = "Primary Reporter",
-                description = description,
-                timestamp = now,
-                imageUrl = imageUrl
-            )
+        val initialReport = CitizenReport(
+            id = "CR-${System.currentTimeMillis() % 10000}",
+            incidentId = incidentId,
+            reporterName = "Primary Reporter",
+            description = description,
+            timestamp = now,
+            imageUrl = imageUrl
         )
+
+        dao.insertTimelineEvents(listOf(event1, event2, event3).map { TimelineEventEntity.fromDomain(it) })
+        dao.insertCitizenReport(CitizenReportEntity.fromDomain(initialReport))
+
+        // Cloud Firestore
+        firebaseService?.saveIncident(newIncident)
+        firebaseService?.addTimelineEvent(event1)
+        firebaseService?.addTimelineEvent(event2)
+        firebaseService?.addTimelineEvent(event3)
+        firebaseService?.addCitizenReport(initialReport)
 
         onProgress(ReportSubmissionProgress.Success(incidentId, false, analysis))
         return incidentId
@@ -223,7 +286,7 @@ class CivicRepository(
 
     suspend fun submitCommunityConfirmation(incidentId: String, userId: String, isStillHappening: Boolean): Boolean {
         val existing = dao.getUserConfirmation(incidentId, userId)
-        if (existing != null) return false // Prevent spam
+        if (existing != null) return false
 
         val now = System.currentTimeMillis()
         dao.insertConfirmation(
@@ -237,83 +300,98 @@ class CivicRepository(
 
         if (isStillHappening) {
             dao.incrementConfirmationYes(incidentId)
-            dao.insertTimelineEvent(
-                TimelineEventEntity(
-                    incidentId = incidentId,
-                    title = "Community Confirmation",
-                    description = "Nearby citizen verified problem is still active.",
-                    timestamp = now,
-                    status = IncidentStatus.IN_PROGRESS.name,
-                    actorName = "Local Citizen",
-                    actorRole = "Community Validator"
-                )
+            val timelineEvent = TimelineEvent(
+                id = now,
+                incidentId = incidentId,
+                title = "Community Confirmation",
+                description = "Nearby citizen verified problem is still active.",
+                timestamp = now,
+                status = IncidentStatus.IN_PROGRESS,
+                actorName = "Local Citizen",
+                actorRole = "Community Validator"
             )
+            dao.insertTimelineEvent(TimelineEventEntity.fromDomain(timelineEvent))
+            firebaseService?.addTimelineEvent(timelineEvent)
         } else {
             dao.incrementConfirmationNo(incidentId)
         }
+
+        firebaseService?.voteConfirmation(incidentId, userId, isStillHappening)
         return true
     }
 
     suspend fun assignOfficer(incidentId: String, officerName: String) {
         val now = System.currentTimeMillis()
         dao.assignOfficer(incidentId, officerName, now)
-        dao.insertTimelineEvent(
-            TimelineEventEntity(
-                incidentId = incidentId,
-                title = "Officer Assigned & Dispatched",
-                description = "$officerName assigned to field response.",
-                timestamp = now,
-                status = IncidentStatus.IN_PROGRESS.name,
-                actorName = "Operations Dispatch",
-                actorRole = "Dispatcher"
-            )
+        val timelineEvent = TimelineEvent(
+            id = now,
+            incidentId = incidentId,
+            title = "Officer Assigned & Dispatched",
+            description = "$officerName assigned to field response.",
+            timestamp = now,
+            status = IncidentStatus.IN_PROGRESS,
+            actorName = "Operations Dispatch",
+            actorRole = "Dispatcher"
         )
+        dao.insertTimelineEvent(TimelineEventEntity.fromDomain(timelineEvent))
+
+        firebaseService?.assignOfficer(incidentId, officerName, now)
+        firebaseService?.addTimelineEvent(timelineEvent)
     }
 
     suspend fun submitResolution(incidentId: String, officerName: String, notes: String, imageUrl: String?) {
         val now = System.currentTimeMillis()
         dao.resolveIncident(incidentId, notes, imageUrl, now)
-        dao.insertTimelineEvent(
-            TimelineEventEntity(
-                incidentId = incidentId,
-                title = "Resolution Submitted",
-                description = notes,
-                timestamp = now,
-                status = IncidentStatus.RESOLVED.name,
-                actorName = officerName,
-                actorRole = "Field Officer"
-            )
+        val timelineEvent = TimelineEvent(
+            id = now,
+            incidentId = incidentId,
+            title = "Resolution Submitted",
+            description = notes,
+            timestamp = now,
+            status = IncidentStatus.RESOLVED,
+            actorName = officerName,
+            actorRole = "Field Officer"
         )
+        dao.insertTimelineEvent(TimelineEventEntity.fromDomain(timelineEvent))
+
+        firebaseService?.resolveIncident(incidentId, notes, imageUrl, now)
+        firebaseService?.addTimelineEvent(timelineEvent)
     }
 
     suspend fun verifyResolution(incidentId: String, isSatisfied: Boolean, notes: String? = null) {
         val now = System.currentTimeMillis()
         if (isSatisfied) {
             dao.verifyIncident(incidentId, now)
-            dao.insertTimelineEvent(
-                TimelineEventEntity(
-                    incidentId = incidentId,
-                    title = "Citizen Verification Completed",
-                    description = "Reporter confirmed problem is resolved satisfactorily.",
-                    timestamp = now,
-                    status = IncidentStatus.VERIFIED.name,
-                    actorName = "Citizen Reporter",
-                    actorRole = "Auditor"
-                )
+            val timelineEvent = TimelineEvent(
+                id = now,
+                incidentId = incidentId,
+                title = "Citizen Verification Completed",
+                description = "Reporter confirmed problem is resolved satisfactorily.",
+                timestamp = now,
+                status = IncidentStatus.VERIFIED,
+                actorName = "Citizen Reporter",
+                actorRole = "Auditor"
             )
+            dao.insertTimelineEvent(TimelineEventEntity.fromDomain(timelineEvent))
+
+            firebaseService?.verifyIncident(incidentId, now)
+            firebaseService?.addTimelineEvent(timelineEvent)
         } else {
             dao.reopenIncident(incidentId, now)
-            dao.insertTimelineEvent(
-                TimelineEventEntity(
-                    incidentId = incidentId,
-                    title = "Issue Reopened by Citizen",
-                    description = notes ?: "Citizen reported resolution was incomplete.",
-                    timestamp = now,
-                    status = IncidentStatus.REOPENED.name,
-                    actorName = "Citizen Reporter",
-                    actorRole = "Auditor"
-                )
+            val timelineEvent = TimelineEvent(
+                id = now,
+                incidentId = incidentId,
+                title = "Issue Reopened by Citizen",
+                description = notes ?: "Citizen reported resolution was incomplete.",
+                timestamp = now,
+                status = IncidentStatus.REOPENED,
+                actorName = "Citizen Reporter",
+                actorRole = "Auditor"
             )
+            dao.insertTimelineEvent(TimelineEventEntity.fromDomain(timelineEvent))
+
+            firebaseService?.reopenIncident(incidentId, now)
+            firebaseService?.addTimelineEvent(timelineEvent)
         }
     }
 

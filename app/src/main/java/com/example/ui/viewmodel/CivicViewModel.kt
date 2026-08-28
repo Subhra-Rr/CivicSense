@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.auth.AuthManager
 import com.example.data.auth.UserProfile
+import com.example.data.firebase.FirebaseCivicService
 import com.example.data.local.CivicDatabase
 import com.example.data.model.CivicCategory
 import com.example.data.model.CivicIncident
@@ -30,7 +31,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalCoroutinesApi::class)
 class CivicViewModel(application: Application) : AndroidViewModel(application) {
     private val database = CivicDatabase.getDatabase(application)
-    private val repository = CivicRepository(database.civicDao())
+    private val firebaseService = FirebaseCivicService(application)
+    private val repository = CivicRepository(database.civicDao(), firebaseService)
     private val authManager = AuthManager(application)
 
     val currentUser: StateFlow<UserProfile> = authManager.currentUser
