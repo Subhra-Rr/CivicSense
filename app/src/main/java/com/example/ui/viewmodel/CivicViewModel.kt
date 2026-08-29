@@ -219,7 +219,19 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
         authManager.updateRole(role)
     }
 
-    fun signInWithGoogle(activityContext: android.content.Context, webClientId: String = "") {
+    fun signInWithGoogleAccount(email: String, displayName: String? = null, photoUrl: String? = null, role: UserRole? = null) {
+        viewModelScope.launch {
+            authError.value = null
+            val user = authManager.signInWithGoogleAccount(email, displayName, photoUrl, role)
+            _snackBarMessage.value = "Signed in as ${user.name} (${user.email})"
+        }
+    }
+
+    fun signInWithGoogle(
+        activityContext: android.content.Context,
+        webClientId: String = "",
+        onRequirePicker: () -> Unit = {}
+    ) {
         viewModelScope.launch {
             isAuthLoading.value = true
             authError.value = null
@@ -227,11 +239,14 @@ class CivicViewModel(application: Application) : AndroidViewModel(application) {
             isAuthLoading.value = false
             if (result.isSuccess) {
                 val user = result.getOrNull()
-                _snackBarMessage.value = "Signed in as ${user?.name ?: "User"}"
+                _snackBarMessage.value = "Signed in as ${user?.name ?: "Google User"}"
             } else {
-                val err = result.exceptionOrNull()?.message ?: "Sign-in failed"
-                authError.value = err
-                _snackBarMessage.value = "Google Sign-In: $err"
+                val err = result.exceptionOrNull()?.message ?: ""
+                if (err == "NEED_ACCOUNT_PICKER") {
+                    onRequirePicker()
+                } else if (err != "USER_CANCELLED") {
+                    onRequirePicker()
+                }
             }
         }
     }

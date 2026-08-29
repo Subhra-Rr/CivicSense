@@ -98,7 +98,12 @@ fun CivicMainScreen(
         AuthScreen(
             isLoading = isAuthLoading,
             errorMessage = authError,
-            onGoogleSignIn = { context -> viewModel.signInWithGoogle(context) },
+            onGoogleSignIn = { context, onRequirePicker ->
+                viewModel.signInWithGoogle(context, onRequirePicker = onRequirePicker)
+            },
+            onGoogleAccountSelect = { email, name, photo, role ->
+                viewModel.signInWithGoogleAccount(email, name, photo, role)
+            },
             onEmailSignIn = { email, pass, role -> viewModel.signInWithEmail(email, pass, role) },
             onEmailSignUp = { name, email, pass, role -> viewModel.signUp(name, email, pass, role) },
             modifier = modifier
@@ -468,7 +473,12 @@ fun CivicMainScreen(
     if (showAuthDialog) {
         AuthDialog(
             onDismiss = { showAuthDialog = false },
-            onGoogleSignIn = { context -> viewModel.signInWithGoogle(context) },
+            onGoogleSignIn = { context, onRequirePicker ->
+                viewModel.signInWithGoogle(context, onRequirePicker = onRequirePicker)
+            },
+            onGoogleAccountSelect = { email, name, photo, role ->
+                viewModel.signInWithGoogleAccount(email, name, photo, role)
+            },
             onEmailSignIn = { email, pass, role -> viewModel.signInWithEmail(email, pass, role) },
             onEmailSignUp = { name, email, pass, role -> viewModel.signUp(name, email, pass, role) }
         )

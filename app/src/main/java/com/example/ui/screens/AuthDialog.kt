@@ -77,7 +77,8 @@ import androidx.compose.ui.platform.LocalContext
 @Composable
 fun AuthDialog(
     onDismiss: () -> Unit,
-    onGoogleSignIn: (Context) -> Unit,
+    onGoogleSignIn: (Context, onRequirePicker: () -> Unit) -> Unit,
+    onGoogleAccountSelect: (email: String, name: String?, photoUrl: String?, role: UserRole) -> Unit,
     onEmailSignIn: (email: String, password: String, role: UserRole) -> Unit,
     onEmailSignUp: (name: String, email: String, password: String, role: UserRole) -> Unit,
     modifier: Modifier = Modifier
@@ -91,6 +92,7 @@ fun AuthDialog(
     var selectedRole by remember { mutableStateOf(UserRole.CITIZEN) }
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var showGoogleAccountPicker by remember { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -183,9 +185,7 @@ fun AuthDialog(
                 // Google Sign In Button
                 Button(
                     onClick = {
-                        isSubmitting = true
-                        onGoogleSignIn(context)
-                        onDismiss()
+                        showGoogleAccountPicker = true
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -257,9 +257,18 @@ fun AuthDialog(
                             value = name,
                             onValueChange = { name = it },
                             label = { Text("Full Name") },
-                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = CivicBlue) },
                             singleLine = true,
                             shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                focusedBorderColor = CivicBlue,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                focusedLabelColor = CivicBlue,
+                                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                cursorColor = CivicBlue
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 12.dp)
@@ -273,9 +282,19 @@ fun AuthDialog(
                     value = email,
                     onValueChange = { email = it },
                     label = { Text("Email Address") },
-                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                    placeholder = { Text("your.email@example.com") },
+                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = CivicBlue) },
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedBorderColor = CivicBlue,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedLabelColor = CivicBlue,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        cursorColor = CivicBlue
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("auth_email_field")
@@ -288,18 +307,28 @@ fun AuthDialog(
                     value = password,
                     onValueChange = { password = it },
                     label = { Text("Password") },
-                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = CivicBlue) },
                     trailingIcon = {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
                                 imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = "Toggle password visibility"
+                                contentDescription = "Toggle password visibility",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     singleLine = true,
                     shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedBorderColor = CivicBlue,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        focusedLabelColor = CivicBlue,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        cursorColor = CivicBlue
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("auth_password_field")
@@ -465,5 +494,17 @@ fun AuthDialog(
                 }
             }
         }
+    }
+
+    if (showGoogleAccountPicker) {
+        GoogleAccountSelectorDialog(
+            selectedRole = selectedRole,
+            onDismiss = { showGoogleAccountPicker = false },
+            onSelectAccount = { accEmail, accName, photoUrl ->
+                showGoogleAccountPicker = false
+                onGoogleAccountSelect(accEmail, accName, photoUrl, selectedRole)
+                onDismiss()
+            }
+        )
     }
 }

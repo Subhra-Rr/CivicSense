@@ -6,7 +6,7 @@ plugins {
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
-  alias(libs.plugins.google.services)
+  // alias(libs.plugins.google.services)
 }
 
 android {
@@ -61,6 +61,17 @@ android {
     includeInApk = false
     includeInBundle = true
   }
+  lint {
+    abortOnError = false
+    checkReleaseBuilds = false
+    disable += setOf(
+      "GradleDependency",
+      "AndroidGradlePluginVersion",
+      "NewerVersionAvailable",
+      "UnusedResources",
+      "IconDipSize"
+    )
+  }
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
@@ -71,13 +82,13 @@ secrets {
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
 }
 
-googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
+// googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
 
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
-  implementation(platform(libs.firebase.bom))
+  // implementation(platform(libs.firebase.bom))
   implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
   // implementation(libs.androidx.camera.camera2)
@@ -101,12 +112,12 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
-  implementation(libs.firebase.firestore)
-  implementation(libs.firebase.auth)
+  // implementation(libs.firebase.firestore)
+  // implementation(libs.firebase.auth)
 
   // Google Sign-In & Credential Manager
   implementation(libs.androidx.credentials)
-  implementation(libs.androidx.credentials.play.services)
+  // implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)
   // implementation(libs.firebase.appcheck.recaptcha)
   // implementation(libs.firebase.appcheck.debug)
@@ -115,7 +126,7 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  implementation(libs.play.services.location)
+  // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)

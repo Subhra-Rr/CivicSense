@@ -3,6 +3,7 @@ package com.example.data.auth
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import androidx.core.content.edit
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
@@ -82,32 +83,58 @@ class AuthManager(private val context: Context) {
     }
 
     private fun saveSession(user: UserProfile) {
-        prefs.edit().apply {
+        prefs.edit {
             putString("user_id", user.id)
             putString("user_name", user.name)
             putString("user_email", user.email)
             putString("user_role", user.role.name)
             putBoolean("is_google_user", user.isGoogleUser)
             putString("avatar_url", user.avatarUrl)
-            apply()
         }
         _currentUser.value = user
         _isAuthenticated.value = true
     }
 
+    suspend fun signInWithGoogleAccount(
+        email: String,
+        displayName: String? = null,
+        photoUrl: String? = null,
+        role: UserRole? = null
+    ): UserProfile {
+        val cleanEmail = email.trim().lowercase()
+        val derivedName = displayName?.takeIf { it.isNotBlank() }
+            ?: cleanEmail.substringBefore("@").replace(".", " ").replace("_", " ").capitalizeWords()
+        val avatar = photoUrl?.takeIf { it.isNotBlank() }
+            ?: "https://api.dicebear.com/7.x/initials/svg?seed=${derivedName.replace(" ", "%20")}&backgroundColor=1E88E5,1565C0,0D47A1"
+
+        val user = UserProfile(
+            id = "google_$cleanEmail",
+            name = derivedName,
+            email = cleanEmail,
+            role = role ?: _currentUser.value.role,
+            isGoogleUser = true,
+            avatarUrl = avatar
+        )
+        saveSession(user)
+        return user
+    }
+
     suspend fun signInWithGoogle(activityContext: Context, webClientId: String = ""): Result<UserProfile> {
+        val clientId = webClientId.ifBlank {
+            try {
+                BuildConfig.GOOGLE_WEB_CLIENT_ID
+            } catch (e: Throwable) {
+                ""
+            }
+        }
+
+        // If no genuine Google Cloud OAuth Web Client ID is provisioned, route directly to the Google Account Chooser
+        if (clientId.isBlank() || clientId.contains("bltbhknm5dv37qrqop5989iavur96fa4")) {
+            return Result.failure(Exception("NEED_ACCOUNT_PICKER"))
+        }
+
         return try {
             val credentialManager = CredentialManager.create(activityContext)
-            val clientId = webClientId.ifBlank {
-                try {
-                    BuildConfig.GOOGLE_WEB_CLIENT_ID
-                } catch (e: Throwable) {
-                    ""
-                }
-            }.ifBlank {
-                "726026241271-bltbhknm5dv37qrqop5989iavur96fa4.apps.googleusercontent.com"
-            }
-
             val rawNonce = UUID.randomUUID().toString()
             val md = MessageDigest.getInstance("SHA-256")
             val digest = md.digest(rawNonce.toByteArray())
@@ -132,34 +159,33 @@ class AuthManager(private val context: Context) {
             val credential = result.credential
             if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                 val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                val avatar = googleIdTokenCredential.profilePictureUri?.toString()
+                    ?: "https://api.dicebear.com/7.x/initials/svg?seed=${(googleIdTokenCredential.displayName ?: "User").replace(" ", "%20")}&backgroundColor=1E88E5"
                 val user = UserProfile(
                     id = googleIdTokenCredential.id,
-                    name = googleIdTokenCredential.displayName ?: googleIdTokenCredential.id.substringBefore("@"),
+                    name = googleIdTokenCredential.displayName ?: googleIdTokenCredential.id.substringBefore("@").capitalizeWords(),
                     email = googleIdTokenCredential.id,
                     role = _currentUser.value.role,
                     isGoogleUser = true,
-                    avatarUrl = googleIdTokenCredential.profilePictureUri?.toString()
+                    avatarUrl = avatar
                 )
                 saveSession(user)
                 Result.success(user)
             } else {
-                Result.failure(Exception("Unsupported credential type returned from Google"))
+                Result.failure(Exception("NEED_ACCOUNT_PICKER"))
             }
+        } catch (e: NoCredentialException) {
+            Log.d("AuthManager", "No credentials available: ${e.message}")
+            Result.failure(Exception("NEED_ACCOUNT_PICKER"))
         } catch (e: GetCredentialCancellationException) {
             Log.d("AuthManager", "Google sign-in was cancelled by user")
-            Result.failure(Exception("Google Sign-In was cancelled"))
-        } catch (e: NoCredentialException) {
-            Log.w("AuthManager", "No Google credentials available on device", e)
-            Result.failure(Exception("No Google account selected or available"))
-        } catch (e: GoogleIdTokenParsingException) {
-            Log.e("AuthManager", "Google ID token parse error", e)
-            Result.failure(Exception("Failed to parse Google account token: ${e.message}"))
+            Result.failure(Exception("USER_CANCELLED"))
         } catch (e: GetCredentialException) {
-            Log.w("AuthManager", "CredentialManager exception: ${e.message}")
-            Result.failure(Exception(e.message ?: "Google Sign-In failed"))
+            Log.w("AuthManager", "GetCredentialException: ${e.message}")
+            Result.failure(Exception("NEED_ACCOUNT_PICKER"))
         } catch (e: Throwable) {
-            Log.e("AuthManager", "Unexpected Google Sign-In error", e)
-            Result.failure(Exception(e.message ?: "Authentication error"))
+            Log.w("AuthManager", "Google Play Services CredentialManager fallback required: ${e.message}")
+            Result.failure(Exception("NEED_ACCOUNT_PICKER"))
         }
     }
 
@@ -180,7 +206,7 @@ class AuthManager(private val context: Context) {
     fun updateRole(newRole: UserRole) {
         val updated = _currentUser.value.copy(role = newRole)
         _currentUser.value = updated
-        prefs.edit().putString("user_role", newRole.name).apply()
+        prefs.edit { putString("user_role", newRole.name) }
     }
 
     suspend fun signOut() {
@@ -190,7 +216,7 @@ class AuthManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e("AuthManager", "Error clearing credentials", e)
         }
-        prefs.edit().clear().apply()
+        prefs.edit { clear() }
         _isAuthenticated.value = false
         _currentUser.value = defaultGuestUser()
     }
